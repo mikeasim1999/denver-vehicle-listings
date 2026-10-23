@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Databricks
+.databricks/
+*.egg-info/
+
+# Power BI
+*.pbix
+*.pbit
+
+# Credentials / secrets
+*.env
+credentials.*
+secrets.*
+
+# Logs
+*.log
+
+# Data files
+*.csv
+*.parquet
+*.json
+!queries/**/*.json
