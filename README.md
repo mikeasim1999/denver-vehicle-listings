@@ -99,15 +99,15 @@ The gold tables are consumed by a Power BI semantic model with 7 tables and 20 D
 ### Market Analysis Dashboard
 ![Average List Price View](reports/screenshots/report_avg_list_price.png)
 
-The report is built around a **field parameter** (`Param - Metrics`) that drives the entire page. Selecting a different KPI card switches the active metric across all visuals simultaneously — the area chart, matrix table, decomposition tree, and tooltip all respond to the selection.
+The report is built around a **field parameter** (`Param - Metrics`) that drives the entire page. Selecting a different KPI card switches the active metric across all visuals simultaneously — the area chart, decomposition tree, and tooltip all respond to the selection.
 
 **Selecting "Average Days on Market":**
 
 ![Average Days on Market View](reports/screenshots/report_avg_days_on_market.png)
 
 #### Report Highlights
-- **Tile Slicer as KPI Cards** — The four metric cards at the top are a tile slicer connected to the field parameter. Selecting one changes the active metric across the entire page while also displaying the current value — making the slicer itself informative rather than just a control
-- **Field Parameter** — A `Param - Metrics` field parameter powers the `Selected Metric` DAX measure, which uses `SWITCH` on `SELECTEDVALUE` to dynamically return the correct calculation. A matching dynamic format string expression ensures currency metrics display as `$#,0` and count metrics as `#,0`
+- **Tile Slicer as KPI Cards** — The four metric cards at the top are a tile slicer connected to the field parameter. Selecting one changes the active metric across the page while also displaying the current value — making the slicer itself informative rather than just a control
+- **Field Parameter** — A field parameter powers the `Selected Metric` DAX measure, which uses `SWITCH` on `SELECTEDVALUE` to dynamically return the correct calculation. A matching dynamic format string expression ensures currency metrics display as `$#,0` and count metrics as `#,0`
 - **Growth Annotation** — The area chart calculates period-over-period growth and positions the label at the midpoint of the selected date range using `DATEDIFF` and a median-date calculation
 - **Custom Tooltip** — Hovering over the area chart shows the metric value, min/max for the period, and a comparison to the overall average with a directional arrow (▲/▼) and conditional color formatting (red above average, green below)
 - **Decomposition Tree** — The Vehicle Analysis section uses a decomposition tree to drill into what drives the selected metric across Body Type, Drive Type, and Make
