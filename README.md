@@ -6,6 +6,7 @@ An end-to-end data engineering pipeline that ingests daily vehicle listings for 
 ![Delta Lake](https://img.shields.io/badge/Delta_Lake-003366?style=flat&logo=delta&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![Spark SQL](https://img.shields.io/badge/Spark_SQL-E25A1C?style=flat&logo=apachespark&logoColor=white)
+![DAX](https://img.shields.io/badge/DAX-118AB2?style=flat&logoColor=white)
 ![Power BI](https://img.shields.io/badge/Power_BI-F2C811?style=flat&logo=powerbi&logoColor=black)
 
 ## Overview
@@ -49,6 +50,7 @@ denver-vehicle-listings/
 │       ├── dealers.sql                 # Dealer dimension (dedup)
 │       └── vehicles.sql               # Vehicle dimension (dedup)
 ├── reports/
+│   ├── measures.dax                    # All 20 DAX measures from the semantic model
 │   └── screenshots/                    # Power BI report screenshots
 ├── docs/
 │   └── architecture.md                 # Detailed architecture documentation
@@ -86,8 +88,11 @@ Produces three focused tables:
 - **`dealers`** — One row per dealer (latest record wins via `ROW_NUMBER`)
 - **`vehicles`** — One row per vehicle (latest record wins via `QUALIFY`)
 
-### 4. Power BI
-The gold tables are consumed by a Power BI report for interactive analysis of the Denver used-vehicle market.
+### 4. Power BI (`reports/measures.dax`)
+The gold tables are consumed by a Power BI semantic model with 7 tables and 20 DAX measures organized into:
+- **Listing Metrics** — Core KPIs: `Number of Listings`, `Average List Price`, `Average Days on Market`, `Average Vehicle Value`, plus a dynamic `Selected Metric` switcher driven by a parameter slicer
+- **Area Chart CF** — Dynamic axis bounds, growth percentage calculations, and midpoint label positioning for the trend area chart
+- **Conditional Formatting** — Dynamic subtitles, tooltip comparisons vs. overall average with directional arrows (UNICHAR), and color-coded conditional formatting
 
 ## Parameters
 

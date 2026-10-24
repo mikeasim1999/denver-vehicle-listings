@@ -1,0 +1,274 @@
+-- =============================================================================
+-- Denver Vehicle Listings — Power BI DAX Measures
+-- Semantic Model: Vehicle Listings
+-- All measures stored in the _Measures table
+-- =============================================================================
+
+
+-- =============================================================================
+-- LISTING METRICS
+-- Core business measures for vehicle listing analysis
+-- =============================================================================
+
+-- Number of Listings
+-- Distinct count of listings in the current filter context
+Number of Listings =
+DISTINCTCOUNT('Daily Denver Vehicle Listings'[Listing ID])
+
+-- Format: #,0
+
+
+-- Average List Price
+-- Mean list price across filtered listings
+Average List Price =
+AVERAGE('Daily Denver Vehicle Listings'[List Price])
+
+-- Format: $#,0
+
+
+-- Average Days on Market
+-- Mean days on market across filtered listings
+Average Days on Market =
+AVERAGE('Daily Denver Vehicle Listings'[Days on Market])
+
+-- Format: 0
+
+
+-- Average Vehicle Value
+-- Mean value variance (difference between estimated value and list price)
+Average Vehicle Value =
+AVERAGE('Daily Denver Vehicle Listings'[Value Variance])
+
+-- Format: $#,0
+
+
+-- Selected Metric
+-- Dynamic metric switcher driven by the Param - Metrics slicer
+Selected Metric =
+SWITCH(
+    SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]),
+    "'_Measures'[Average List Price]", [Average List Price],
+    "'_Measures'[Average Days on Market]", [Average Days on Market],
+    "'_Measures'[Number of Listings]", [Number of Listings],
+    "'_Measures'[Average Vehicle Value]", [Average Vehicle Value])
+
+-- Dynamic Format String:
+-- SWITCH(
+--     SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]),
+--     "'_Measures'[Average List Price]", "$#,0",
+--     "'_Measures'[Average Vehicle Value]", "$#,0",
+--     "'_Measures'[Average Days on Market]", "#,0",
+--     "'_Measures'[Number of Listings]", "#,0"
+-- )
+
+
+-- All Selected Metric
+-- Selected metric calculated across all dates (removes date filter)
+All Selected Metric =
+CALCULATE(
+    [Selected Metric],
+    REMOVEFILTERS('Date'))
+
+
+-- =============================================================================
+-- AREA CHART CONDITIONAL FORMATTING
+-- Measures that control area chart axis bounds and growth labels
+-- =============================================================================
+
+-- Area Chart Y Axis Max
+-- Dynamic upper bound for area chart (120% of max value in selection)
+Area Chart Y Axis Max =
+MAXX(
+    ALLSELECTED('Date'[Date]),
+[Selected Metric]) * 1.2
+
+
+-- Area Chart Y Axis Min
+-- Dynamic lower bound for area chart (80% of min value in selection)
+Area Chart Y Axis Min =
+MINX(
+    ALLSELECTED('Date'[Date]),
+[Selected Metric]) * 0.8
+
+
+-- Growth Label Placeholder
+-- Positions the growth annotation at the midpoint of the selected date range
+Growth Label Placeholder =
+VAR calc =
+    MAXX(
+        FILTER(
+            ALLSELECTED('Date'[Date]),
+                'Date'[Date] >= [Min Selected Date] && 'Date'[Date] <= [Max Selected Date]),
+            [Selected Metric]) * 1.15
+
+VAR conditionalCalc =
+IF(
+    MAX('Date'[Date]) >= [Min Selected Date] && MAX('Date'[Date]) <= [Max Selected Date],
+        calc,
+            BLANK())
+
+VAR number_of_days_in_selected_period =
+ROUNDUP(
+    DIVIDE(
+        DATEDIFF([Min Selected Date], [Max Selected Date], DAY),
+            2),
+    0)
+
+VAR median_date =
+[Min Selected Date] + number_of_days_in_selected_period
+
+VAR showCalc =
+IF(
+    MAX('Date'[Date]) = median_date,
+            conditionalCalc,
+                BLANK())
+
+RETURN
+showCalc
+
+
+-- Growth For Label
+-- Calculates percentage growth between the first and last date in selection
+Growth For Label =
+VAR min_date_calc =
+CALCULATE(
+    [Selected Metric],
+    FILTER(ALLSELECTED('date'), 'Date'[Date] = [Min Selected Date]))
+
+VAR max_date_calc =
+CALCULATE(
+    [Selected Metric],
+    FILTER(ALLSELECTED('date'), 'Date'[Date] = [Max Selected Date]))
+
+VAR growth =
+DIVIDE(
+    max_date_calc - min_date_calc,
+    min_date_calc)
+
+RETURN
+FORMAT(growth, "##.##%") & " Growth"
+
+
+-- Growth Label Title
+-- Date range label for the growth annotation
+Growth Label Title =
+[Min Selected Date] & " - " & [Max Selected Date]
+
+
+-- =============================================================================
+-- CONDITIONAL FORMATTING & DYNAMIC LABELS
+-- Measures used for report interactivity and conditional formatting
+-- =============================================================================
+
+-- Min Selected Date
+-- Earliest date in the current slicer selection
+Min Selected Date =
+CALCULATE(
+    MIN('Date'[Date]),
+        ALLSELECTED('Date')
+    )
+
+
+-- Max Selected Date
+-- Latest date in the current slicer selection
+Max Selected Date =
+CALCULATE(
+    MAX('Date'[Date]),
+        ALLSELECTED('Date')
+    )
+
+
+-- Dynamic Report Subtitle
+-- Builds a contextual subtitle based on the selected metric and timeframe
+Dynamic Report Subtitle =
+VAR text_after_metric = " " & SELECTEDVALUE('Timeframe Selection'[Type])
+
+RETURN
+SWITCH(
+    SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]),
+    "'_Measures'[Average List Price]", "Average List Price" & text_after_metric,
+    "'_Measures'[Average Days on Market]", "Average Days on Market" & text_after_metric,
+    "'_Measures'[Number of Listings]", "Number of Listings" & text_after_metric,
+    "'_Measures'[Average Vehicle Value]", "Average Vehicle Value" & text_after_metric)
+
+
+-- Button Selected Metric Label
+-- Formatted value for metric selector buttons
+Button Selected Metric Label =
+SWITCH(
+    SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]),
+
+    "'_Measures'[Average List Price]",
+        FORMAT([Average List Price], "$#,0"),
+
+    "'_Measures'[Average Vehicle Value]",
+        FORMAT([Average Vehicle Value], "$#,0"),
+
+    "'_Measures'[Average Days on Market]",
+        FORMAT([Average Days on Market], "#,0"),
+
+    "'_Measures'[Number of Listings]",
+        FORMAT([Number of Listings], "#,0")
+)
+
+
+-- Tooltip Line Chart Card Title
+-- Dynamic title for tooltip line chart card
+Tooltip Line Chart Card Title =
+MAX('Param -  Metrics'[Param -  Metrics]) & ": " & SELECTEDVALUE('Date'[Date])
+
+
+-- Max All Time Selected Metric
+-- Highest value of the selected metric across all dates (ignores date filter)
+Max All Time Selected Metric =
+MAXX(
+    ALL('Date'),
+        [Selected Metric])
+
+-- Dynamic Format String: (same as Selected Metric)
+
+
+-- Min All Time Selected Metric
+-- Lowest value of the selected metric across all dates (ignores date filter)
+Min All Time Selected Metric =
+MINX(
+    ALL('Date'),
+        [Selected Metric])
+
+-- Dynamic Format String: (same as Selected Metric)
+
+
+-- Tooltip Average Comparison
+-- Shows how the current value compares to the overall average with directional arrows
+Tooltip Average Comparison =
+VAR comp_to_average = [Selected Metric] - [All Selected Metric]
+
+RETURN
+SWITCH(
+    TRUE(),
+        comp_to_average > 0 && (SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]) = "'_Measures'[Average List Price]" || SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]) = "'_Measures'[Average Vehicle Value]"),
+            FORMAT(comp_to_average, "$#,0") & " " & UNICHAR(11165) & " Avg",
+        comp_to_average <= 0 && (SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]) = "'_Measures'[Average List Price]" || SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]) = "'_Measures'[Average Vehicle Value]"),
+            FORMAT(comp_to_average, "$#,0") & " " & UNICHAR(11167) & " Avg",
+        comp_to_average > 0 && SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]) = "'_Measures'[Average Days on Market]",
+            FORMAT(comp_to_average, "#,0") & " " & UNICHAR(11165) & " Avg",
+        comp_to_average <= 0 && SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]) = "'_Measures'[Average Days on Market]",
+            FORMAT(comp_to_average, "#,0") & " " & UNICHAR(11167) & " Avg",
+        SELECTEDVALUE('Param -  Metrics'[Param -  Metrics Fields]) = "'_Measures'[Number of Listings]",
+            " "
+    )
+
+
+-- Tooltip Average Comparison CF
+-- Conditional formatting color for the average comparison (red above, green below)
+Tooltip Average Comparison CF =
+VAR comp_to_average = [Selected Metric] - [All Selected Metric]
+
+RETURN
+SWITCH(
+    TRUE(),
+        comp_to_average > 0,
+            "#D64554",
+        comp_to_average <= 0,
+            "#1AAB40"
+    )
