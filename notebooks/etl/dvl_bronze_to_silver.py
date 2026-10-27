@@ -1,5 +1,4 @@
 # Databricks notebook source
-
 # MAGIC %md
 # MAGIC ## Bronze to Silver Transformation
 # MAGIC
@@ -92,191 +91,31 @@ KEYS = {
 
 # COMMAND ----------
 
-def ensure_logging_table(catalog, schema_name):
-    """
-    Creates ETL run log table if it doesn't exist with comprehensive metrics.
-    """
-    full_table_name = f"{catalog}.{schema_name}.etl_run_log"
-
-    try:
-        table_exists = spark.catalog.tableExists(full_table_name)
-
-        if not table_exists:
-            logger.info(f"Creating comprehensive logging table: {full_table_name}")
-            spark.sql(f"""
-                CREATE TABLE IF NOT EXISTS {full_table_name} (
-                    run_id STRING NOT NULL COMMENT 'Unique identifier for the ETL run',
-                    table_name STRING NOT NULL COMMENT 'Name of the table being processed',
-                    log_datetime TIMESTAMP NOT NULL COMMENT 'Timestamp when the run started',
-                    status STRING NOT NULL COMMENT 'Run status: SUCCESS, FAILED, or SKIPPED',
-                    load_type STRING COMMENT 'Type of load: merge, overwrite, skip, or error',
-                    error_message STRING COMMENT 'Error details if failed',
-                    duration_seconds DOUBLE COMMENT 'Total execution time in seconds',
-                    duration_minutes DOUBLE COMMENT 'Total execution time in minutes',
-                    read_duration_seconds DOUBLE COMMENT 'Time spent reading source data',
-                    write_duration_seconds DOUBLE COMMENT 'Time spent writing to target',
-                    source_row_count BIGINT COMMENT 'Number of rows in source query',
-                    target_row_count BIGINT COMMENT 'Number of rows in target after operation',
-                    inserted INT COMMENT 'Number of rows inserted',
-                    updated INT COMMENT 'Number of rows updated',
-                    deleted INT COMMENT 'Number of rows deleted',
-                    copied INT COMMENT 'Number of rows copied (unchanged in merge)',
-                    incremental_interval INT COMMENT 'Incremental interval in days (if applicable)',
-                    was_forced_full_load BOOLEAN COMMENT 'Whether this was forced to full load due to missing table'
-                )
-                USING delta
-                COMMENT 'Comprehensive ETL run log for tracking pipeline execution and performance'
-            """)
-            logger.info(f"Successfully created {full_table_name}")
-        else:
-            logger.info(f"Logging table already exists: {full_table_name}")
-
-    except Exception as e:
-        logger.error(f"Failed to ensure logging table: {e}")
-        raise
-
-
-def log_run(catalog, schema_name, run_context):
-    """
-    Logs comprehensive ETL run information to the logging table.
-    """
-    full_table_name = f"{catalog}.{schema_name}.etl_run_log"
-
-    try:
-        log_schema = StructType([
-            StructField("run_id", StringType(), False),
-            StructField("table_name", StringType(), False),
-            StructField("log_datetime", TimestampType(), False),
-            StructField("status", StringType(), False),
-            StructField("load_type", StringType(), True),
-            StructField("error_message", StringType(), True),
-            StructField("duration_seconds", DoubleType(), True),
-            StructField("duration_minutes", DoubleType(), True),
-            StructField("read_duration_seconds", DoubleType(), True),
-            StructField("write_duration_seconds", DoubleType(), True),
-            StructField("source_row_count", LongType(), True),
-            StructField("target_row_count", LongType(), True),
-            StructField("inserted", IntegerType(), True),
-            StructField("updated", IntegerType(), True),
-            StructField("deleted", IntegerType(), True),
-            StructField("copied", IntegerType(), True),
-            StructField("incremental_interval", IntegerType(), True),
-            StructField("was_forced_full_load", BooleanType(), True),
-        ])
-
-        def to_int(value):
-            return int(value) if value is not None else None
-
-        def to_float(value):
-            return float(value) if value is not None else None
-
-        log_data = {
-            "run_id": str(run_context.get("run_id", "unknown")),
-            "table_name": str(run_context.get("table_name", "unknown")),
-            "log_datetime": run_context.get("log_datetime", datetime.now()),
-            "status": str(run_context.get("status", "UNKNOWN")),
-            "load_type": str(run_context.get("load_type")) if run_context.get("load_type") else None,
-            "error_message": str(run_context.get("error_message"))[:1000] if run_context.get("error_message") else None,
-            "duration_seconds": to_float(run_context.get("duration_seconds")),
-            "duration_minutes": to_float(run_context.get("duration_minutes")),
-            "read_duration_seconds": to_float(run_context.get("read_duration_seconds")),
-            "write_duration_seconds": to_float(run_context.get("write_duration_seconds")),
-            "source_row_count": to_int(run_context.get("source_row_count")),
-            "target_row_count": to_int(run_context.get("target_row_count")),
-            "inserted": to_int(run_context.get("inserted")),
-            "updated": to_int(run_context.get("updated")),
-            "deleted": to_int(run_context.get("deleted")),
-            "copied": to_int(run_context.get("copied")),
-            "incremental_interval": to_int(run_context.get("incremental_interval")),
-            "was_forced_full_load": bool(run_context.get("was_forced_full_load", False)),
-        }
-
-        log_df = spark.createDataFrame([log_data], schema=log_schema)
-        log_df.write.format("delta").mode("append").saveAsTable(full_table_name)
-
-        if log_data["status"] == "SUCCESS":
-            duration_text = (
-                f"{log_data['duration_minutes']:.2f}min"
-                if log_data["duration_minutes"] is not None
-                else "duration unknown"
-            )
-            timing_parts = []
-            if log_data["read_duration_seconds"] is not None:
-                timing_parts.append(f"R:{log_data['read_duration_seconds']:.1f}s")
-            if log_data["write_duration_seconds"] is not None:
-                timing_parts.append(f"W:{log_data['write_duration_seconds']:.1f}s")
-            timing_text = f" ({' + '.join(timing_parts)})" if timing_parts else ""
-
-            logger.info(
-                f"Run logged successfully. "
-                f"Source: {log_data['source_row_count'] if log_data['source_row_count'] is not None else 'N/A'} | "
-                f"Target: {log_data['target_row_count'] if log_data['target_row_count'] is not None else 'N/A'} | "
-                f"Inserted: {log_data['inserted'] if log_data['inserted'] is not None else 'N/A'} | "
-                f"Updated: {log_data['updated'] if log_data['updated'] is not None else 'N/A'} | "
-                f"Deleted: {log_data['deleted'] if log_data['deleted'] is not None else 'N/A'} | "
-                f"{duration_text}{timing_text}"
-            )
-        elif log_data["status"] == "SKIPPED":
-            logger.info("Run logged as skipped.")
-        else:
-            logger.error(
-                f"Run logged as failed. "
-                f"Error: {log_data['error_message'][:100] if log_data['error_message'] else 'Unknown'}"
-            )
-
-    except Exception as e:
-        logger.error(f"Failed to log run to {full_table_name}: {e}")
-        logger.error(traceback.format_exc())
+# MAGIC %run "/Workspace/Utility/Functions/Ensure Logging Table Exists"
 
 # COMMAND ----------
 
-def load_sql_queries():
-    """
-    Loads SQL query files from workspace path.
-    Returns a Spark DataFrame with columns: table_name, query
-    """
-    try:
-        files = dbutils.fs.ls(QUERY_PATH)
-        sql_files = [file.path for file in files if file.path.endswith('.sql')]
+# MAGIC %run "/Workspace/Utility/Functions/Log ETL Run"
 
-        if not sql_files:
-            logger.warning(f"No SQL files found in {QUERY_PATH}")
-            return None
+# COMMAND ----------
 
-        logger.info(f"Found {len(sql_files)} SQL files in {QUERY_PATH}")
+# MAGIC %run "/Workspace/Utility/Functions/Load SQL Queries"
 
-        queries = []
-        for file_path in sql_files:
-            try:
-                table_name = file_path.split('/')[-1].replace('.sql', '')
-                local_path = file_path.replace('dbfs:', '')
-
-                with open(local_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                if content.strip():
-                    queries.append((table_name, content.strip()))
-                    logger.info(f"Loaded query: {table_name} ({len(content)} chars)")
-                else:
-                    logger.warning(f"Skipped empty file: {table_name}")
-            except Exception as e:
-                logger.error(f"Failed to read {file_path}: {e}")
-                continue
-
-        if not queries:
-            return None
-
-        df = spark.createDataFrame(queries, ["table_name", "query"])
-        logger.info(f"Successfully loaded {df.count()} SQL queries")
-        return df
-
-    except Exception as e:
-        logger.error(f"Failed to load SQL files: {e}")
-        logger.error(traceback.format_exc())
-        raise
-
+# COMMAND ----------
 
 sql_queries_df = load_sql_queries()
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Utility/Functions/Ensure Column Exists"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Utility/Functions/Ensure Table Schema"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Utility/Functions/Data Quality Checks"
 
 # COMMAND ----------
 
@@ -354,8 +193,11 @@ def main_etl(table_name):
         logger.info(f"Executing SQL query")
         read_start = datetime.now()
         df = spark.sql(sql_query)
+
         read_duration = (datetime.now() - read_start).total_seconds()
         logger.info(f"Read completed in {read_duration:.2f}s")
+
+        data_quality_checks(table_name, df)
 
         has_data = bool(df.take(1))
         if not has_data:

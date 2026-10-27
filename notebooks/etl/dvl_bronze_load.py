@@ -461,3 +461,4 @@ if pipeline_results:
     display(summary_df)
 else:
     logger.warning("No pipeline results to summarize")
+    
