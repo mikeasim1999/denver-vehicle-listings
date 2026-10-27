@@ -41,7 +41,7 @@ try:
     run_id = dbutils.widgets.get('run_id')
     if not run_id:
         run_id = f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-except:
+except Exception:
     run_id = f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 # Get parameters

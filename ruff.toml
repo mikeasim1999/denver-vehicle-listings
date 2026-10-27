@@ -1,0 +1,17 @@
+line-length = 120
+
+[lint]
+# E: pycodestyle errors, F: pyflakes, W: pycodestyle warnings
+select = ["E", "F", "W"]
+
+# E501: line too long (Databricks notebooks have wide cells)
+# F821: undefined name (spark, dbutils, display are Databricks globals)
+# E402: module-level import not at top (notebooks use %run and cell separators)
+# F841: local variable assigned but unused (common in notebook exploratory cells)
+# F401: unused imports (notebooks import for use in later cells or %run scope)
+# F541: f-string without placeholders (common in log messages)
+ignore = ["E501", "F821", "E402", "F841", "F401", "F541"]
+
+[lint.per-file-ignores]
+# Notebook utilities use globals defined by the calling notebook
+"notebooks/utilities/*.py" = ["F811"]

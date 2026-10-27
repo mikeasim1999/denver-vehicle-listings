@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install ruff
+
+      - name: Lint Python notebooks
+        run: ruff check notebooks/
+
+      - name: Verify notebook structure
+        run: |
+          echo "Checking Databricks notebook headers..."
+          for f in $(find notebooks/ -name "*.py"); do
+            head -1 "$f" | grep -q "# Databricks notebook source" || {
+              echo "FAIL: $f missing Databricks notebook header"
+              exit 1
+            }
+          done
+          echo "All notebooks have valid headers."
