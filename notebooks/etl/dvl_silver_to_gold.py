@@ -1,5 +1,4 @@
 # Databricks notebook source
-
 # MAGIC %md
 # MAGIC ## Silver to Gold Transformation
 # MAGIC
@@ -89,150 +88,31 @@ keys = {
 
 # COMMAND ----------
 
-def ensure_logging_table(catalog, schema_name):
-    """Creates ETL run log table if it doesn't exist."""
-    full_table_name = f"{catalog}.{schema_name}.etl_run_log"
-    try:
-        table_exists = spark.catalog.tableExists(full_table_name)
-        if not table_exists:
-            logger.info(f"Creating logging table: {full_table_name}")
-            spark.sql(f"""
-                CREATE TABLE IF NOT EXISTS {full_table_name} (
-                    run_id STRING NOT NULL,
-                    table_name STRING NOT NULL,
-                    log_datetime TIMESTAMP NOT NULL,
-                    status STRING NOT NULL,
-                    load_type STRING,
-                    error_message STRING,
-                    duration_seconds DOUBLE,
-                    duration_minutes DOUBLE,
-                    read_duration_seconds DOUBLE,
-                    write_duration_seconds DOUBLE,
-                    source_row_count BIGINT,
-                    target_row_count BIGINT,
-                    inserted INT,
-                    updated INT,
-                    deleted INT,
-                    copied INT,
-                    incremental_interval INT,
-                    was_forced_full_load BOOLEAN
-                )
-                USING delta
-                COMMENT 'ETL run log for tracking pipeline execution'
-            """)
-            logger.info(f"Successfully created {full_table_name}")
-    except Exception as e:
-        logger.error(f"Failed to ensure logging table: {e}")
-        raise
-
-
-def log_run(catalog, schema_name, run_context):
-    """Logs ETL run information to the logging table."""
-    full_table_name = f"{catalog}.{schema_name}.etl_run_log"
-    try:
-        log_schema = StructType([
-            StructField("run_id", StringType(), False),
-            StructField("table_name", StringType(), False),
-            StructField("log_datetime", TimestampType(), False),
-            StructField("status", StringType(), False),
-            StructField("load_type", StringType(), True),
-            StructField("error_message", StringType(), True),
-            StructField("duration_seconds", DoubleType(), True),
-            StructField("duration_minutes", DoubleType(), True),
-            StructField("read_duration_seconds", DoubleType(), True),
-            StructField("write_duration_seconds", DoubleType(), True),
-            StructField("source_row_count", LongType(), True),
-            StructField("target_row_count", LongType(), True),
-            StructField("inserted", IntegerType(), True),
-            StructField("updated", IntegerType(), True),
-            StructField("deleted", IntegerType(), True),
-            StructField("copied", IntegerType(), True),
-            StructField("incremental_interval", IntegerType(), True),
-            StructField("was_forced_full_load", BooleanType(), True),
-        ])
-
-        log_data = {
-            "run_id": str(run_context.get("run_id", "unknown")),
-            "table_name": str(run_context.get("table_name", "unknown")),
-            "log_datetime": run_context.get("log_datetime", datetime.now()),
-            "status": str(run_context.get("status", "UNKNOWN")),
-            "load_type": str(run_context.get("load_type")) if run_context.get("load_type") else None,
-            "error_message": str(run_context.get("error_message"))[:1000] if run_context.get("error_message") else None,
-            "duration_seconds": float(run_context.get("duration_seconds", 0.0)),
-            "duration_minutes": float(run_context.get("duration_minutes", 0.0)),
-            "read_duration_seconds": float(run_context.get("read_duration_seconds", 0.0)),
-            "write_duration_seconds": float(run_context.get("write_duration_seconds", 0.0)),
-            "source_row_count": int(run_context.get("source_row_count", 0)),
-            "target_row_count": int(run_context.get("target_row_count", 0)),
-            "inserted": int(run_context.get("inserted", 0)),
-            "updated": int(run_context.get("updated", 0)),
-            "deleted": int(run_context.get("deleted", 0)),
-            "copied": int(run_context.get("copied", 0)),
-            "incremental_interval": int(run_context.get("incremental_interval", 0)) if run_context.get("incremental_interval") else None,
-            "was_forced_full_load": bool(run_context.get("was_forced_full_load", False)),
-        }
-
-        log_df = spark.createDataFrame([log_data], schema=log_schema)
-        log_df.write.format("delta").mode("append").saveAsTable(full_table_name)
-
-        if log_data['status'] == 'SUCCESS':
-            logger.info(
-                f"Run logged: Source: {log_data['source_row_count']:,} | "
-                f"Target: {log_data['target_row_count']:,} | "
-                f"+{log_data['inserted']:,} | ~{log_data['updated']:,} | "
-                f"-{log_data['deleted']:,} | {log_data['duration_minutes']:.2f}min"
-            )
-        elif log_data['status'] == 'SKIPPED':
-            logger.info(f"Run logged: SKIPPED (no source data)")
-        else:
-            logger.error(
-                f"Run logged: FAILED | "
-                f"Error: {log_data['error_message'][:100] if log_data['error_message'] else 'Unknown'}"
-            )
-    except Exception as e:
-        logger.error(f"Failed to log run to {full_table_name}: {e}")
-        logger.error(traceback.format_exc())
+# MAGIC %run "/Workspace/Utility/Functions/Ensure Logging Table Exists"
 
 # COMMAND ----------
 
-def load_sql_queries():
-    """Loads SQL query files from workspace path."""
-    try:
-        files = dbutils.fs.ls(QUERY_PATH)
-        sql_files = [file.path for file in files if file.path.endswith('.sql')]
+# MAGIC %run "/Workspace/Utility/Functions/Log ETL Run"
 
-        if not sql_files:
-            logger.warning(f"No SQL files found in {QUERY_PATH}")
-            return None
+# COMMAND ----------
 
-        logger.info(f"Found {len(sql_files)} SQL files in {QUERY_PATH}")
+# MAGIC %run "/Workspace/Utility/Functions/Load SQL Queries"
 
-        queries = []
-        for file_path in sql_files:
-            try:
-                table_name = file_path.split('/')[-1].replace('.sql', '')
-                local_path = file_path.replace('dbfs:', '')
-                with open(local_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                if content.strip():
-                    queries.append((table_name, content.strip()))
-                    logger.info(f"Loaded query: {table_name} ({len(content)} chars)")
-            except Exception as e:
-                logger.error(f"Failed to read {file_path}: {e}")
-                continue
-
-        if not queries:
-            return None
-
-        df = spark.createDataFrame(queries, ["table_name", "query"])
-        return df
-
-    except Exception as e:
-        logger.error(f"Failed to load SQL files: {e}")
-        raise
-
+# COMMAND ----------
 
 sql_queries_df = load_sql_queries()
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Utility/Functions/Ensure Column Exists"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Utility/Functions/Ensure Table Schema"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Utility/Functions/Data Quality Checks"
 
 # COMMAND ----------
 
@@ -288,9 +168,12 @@ def main_etl(table_name):
         logger.info(f"Executing SQL query")
         read_start = datetime.now()
         df = spark.sql(sql_query)
+        
         has_data = bool(df.take(1))
         read_duration = (datetime.now() - read_start).total_seconds()
         logger.info(f"Read completed in {read_duration:.2f}s")
+
+        data_quality_checks(table_name, df)
 
         if not has_data:
             logger.info(f"No source rows found -> skipping write")
