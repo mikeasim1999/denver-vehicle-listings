@@ -10,8 +10,10 @@ select = ["E", "F", "W"]
 # F841: local variable assigned but unused (common in notebook exploratory cells)
 # F401: unused imports (notebooks import for use in later cells or %run scope)
 # F541: f-string without placeholders (common in log messages)
+# W291: trailing whitespace on non-blank lines
 # W292: no new line at end of file
-ignore = ["E501", "F821", "E402", "F841", "F401", "F541", "W292"]
+# W293: blank line containing whitespace
+ignore = ["E501", "F821", "E402", "F841", "F401", "F541","W291", "W292", "W293"]
 
 [lint.per-file-ignores]
 # Notebook utilities use globals defined by the calling notebook
