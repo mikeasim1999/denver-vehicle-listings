@@ -92,7 +92,7 @@ keys = {
 
 # COMMAND ----------
 
-# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/functions/log_etl_run"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/log_etl_run"
 
 # COMMAND ----------
 
