@@ -88,6 +88,21 @@ ETL notebooks call reusable functions from a separate [`databricks-shared-utilit
 | `ensure_table_schema` | Silver, Gold | Validates DataFrame schema against the target table |
 | `data_quality_checks` | Silver, Gold | Runs metadata-driven DQ rules; CRITICAL failures halt the pipeline |
 
+## Error Handling
+
+Each notebook wraps its core ETL logic in `try/except/finally` blocks with a consistent pattern:
+
+| Behavior | Detail |
+|----------|--------|
+| **Per-table isolation** | Silver and gold notebooks process each table independently — a failure in one table is caught and logged without halting the others |
+| **Typed exception handling (Bronze)** | API fetch logic catches `HTTPError`, `Timeout`, and `RequestException` separately, logging the error type and page number while continuing to the next page |
+| **Validation guards** | Pre-write checks raise `ValueError` for missing merge keys, missing SQL files, and empty API responses — failing fast before bad data reaches the target table |
+| **ETL logging on failure** | The `finally` block ensures every run — success or failure — writes to the `etl_run_log` table with status, duration, and error message |
+| **Graceful run ID fallback** | If the Job-provided `run_id` widget is missing (e.g. during manual notebook runs), each notebook generates a `manual_YYYYMMDD_HHMMSS` ID instead of failing |
+| **Concurrent execution safety** | Silver and gold use `ThreadPoolExecutor` with `as_completed` — each future's result is caught individually so one table's failure doesn't cancel the thread pool |
+
+Critical failures (logging table creation, all pages failing) re-raise to halt the Job and trigger Databricks email notifications.
+
 ## Data Quality
 
 Data quality checks are metadata-driven — rules are stored in a `data_quality_checks` Delta table and evaluated against each DataFrame before it is written to the target table.
