@@ -103,7 +103,24 @@ A weekly VACUUM job reclaims storage from stale files left by `MERGE` operations
 
 ## Power BI Connection
 
-The gold-layer tables are consumed by Power BI via the **Databricks SQL Connector** (Import mode). The semantic model connects through a Databricks SQL warehouse endpoint, which provides a JDBC/ODBC interface to Unity Catalog tables without requiring a running cluster.
+Power BI connects via the **Databricks SQL Connector** (Import mode) through a SQL warehouse endpoint, which provides a JDBC/ODBC interface to Unity Catalog without requiring a running cluster.
+
+### Gold Views (Presentation Layer)
+
+Rather than importing the gold tables directly, Power BI queries **views** that sit on top of the gold tables. These views serve a single purpose: aliasing column names from `snake_case` to `Proper Case` for display in the semantic model.
+
+```sql
+-- Example: analytics_lakehouse.gold.v_daily_listings
+SELECT
+  listing_id AS `Listing ID`,
+  dealer_id AS `Dealer ID`,
+  days_on_market AS `Days on Market`,
+  list_price AS `List Price`,
+  ...
+FROM analytics_lakehouse.gold.daily_listings
+```
+
+This keeps the engineering convention (`snake_case`) in the Delta tables and the business-friendly naming (`Proper Case`) in Power BI, without duplicating data or adding transformation logic to the views.
 
 ## CI/CD & Version Control
 

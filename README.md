@@ -112,7 +112,7 @@ Produces three focused tables:
 - **`vehicles`** — One row per vehicle (latest record wins via `QUALIFY`)
 
 ### 4. Power BI (`reports/measures.dax`)
-The gold tables are consumed by a Power BI semantic model with 7 tables and 20 DAX measures organized into:
+Gold views alias column names from `snake_case` to `Proper Case` for the semantic model — a presentation layer that keeps engineering conventions in the Delta tables and business-friendly naming in Power BI. The semantic model has 7 tables and 20 DAX measures organized into:
 - **Listing Metrics** — Core KPIs: `Number of Listings`, `Average List Price`, `Average Days on Market`, `Average Vehicle Value`, plus a dynamic `Selected Metric` switcher driven by a parameter slicer
 - **Area Chart CF** — Dynamic axis bounds, growth percentage calculations, and midpoint label positioning for the trend area chart
 - **Conditional Formatting** — Dynamic subtitles, tooltip comparisons vs. overall average with directional arrows (UNICHAR), and color-coded conditional formatting
