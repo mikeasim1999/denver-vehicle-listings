@@ -91,15 +91,15 @@ KEYS = {
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Utility/Functions/Ensure Logging Table Exists"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_logging_table_exists"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Utility/Functions/Log ETL Run"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/log_etl_run"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Utility/Functions/Load SQL Queries"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/load_sql_queries"
 
 # COMMAND ----------
 
@@ -107,15 +107,15 @@ sql_queries_df = load_sql_queries()
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Utility/Functions/Ensure Column Exists"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_column_exists"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Utility/Functions/Ensure Table Schema"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_table_schema"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Utility/Functions/Data Quality Checks"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/data_quality_checks"
 
 # COMMAND ----------
 
