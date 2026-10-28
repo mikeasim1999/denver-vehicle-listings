@@ -8,6 +8,11 @@ An end-to-end data engineering pipeline that ingests daily vehicle listings for 
 ![Spark SQL](https://img.shields.io/badge/Spark_SQL-E25A1C?style=flat&logo=apachespark&logoColor=white)
 ![DAX](https://img.shields.io/badge/DAX-118AB2?style=flat&logoColor=white)
 ![Power BI](https://img.shields.io/badge/Power_BI-F2C811?style=flat&logo=powerbi&logoColor=black)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
+
+## Motivation
+
+After the 2025 tariff announcement, I wanted to see how vehicle prices in the Denver metro area would actually respond — whether list prices climbed, how long cars sat on lots, and whether certain makes or body types were hit harder than others. Rather than rely on national aggregates, I built a pipeline to collect local listing data daily so I could track these shifts firsthand.
 
 ## Overview
 
@@ -21,6 +26,10 @@ This project collects ~50 pages of vehicle listing data daily from a third-party
 - **100+ Derived Columns** — Complex parsing of nested JSON arrays (price history, ownership, service records, accident history) and derived metrics (days on market, value variance, dealer brand classification)
 - **ETL Logging** — Every run writes to an `etl_run_log` Delta table with row counts, timestamps, and status
 - **Concurrent Execution** — Silver and gold transformations use `ThreadPoolExecutor` to process tables in parallel
+- **Data Quality Checks** — Metadata-driven validation framework with CRITICAL/WARNING severity levels, enforced before writes
+- **CI/CD** — GitHub Actions with Ruff linting and notebook structure validation on every push and PR
+- **Delta Lake Maintenance** — Scheduled VACUUM job with per-schema storage tracking and email notifications
+- **Idempotent Pipeline** — `MERGE` on composite keys ensures safe re-runs without data duplication
 
 ## Architecture
 
@@ -36,12 +45,14 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture break
 
 ```
 denver-vehicle-listings/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                      # GitHub Actions — Ruff lint + notebook validation
 ├── notebooks/
-│   ├── etl/
-│   │   ├── dvl_bronze_load.py          # API ingestion → bronze Delta table
-│   │   ├── dvl_bronze_to_silver.py     # Bronze → silver transformation driver
-│   │   └── dvl_silver_to_gold.py       # Silver → gold transformation driver
-│   └── utilities/                      # Shared helper notebooks
+│   └── etl/
+│       ├── dvl_bronze_load.py          # API ingestion → bronze Delta table
+│       ├── dvl_bronze_to_silver.py     # Bronze → silver transformation driver
+│       └── dvl_silver_to_gold.py       # Silver → gold transformation driver
 ├── queries/
 │   ├── silver/
 │   │   └── denver_vehicle_listings.sql # Silver transformation (CTEs, 100+ columns)
@@ -53,10 +64,15 @@ denver-vehicle-listings/
 │   ├── measures.dax                    # All 20 DAX measures from the semantic model
 │   └── screenshots/                    # Power BI report screenshots
 ├── docs/
-│   └── architecture.md                 # Detailed architecture documentation
+│   ├── architecture.md                 # Medallion architecture & layer details
+│   ├── ci_cd.md                        # Git integration & CI/CD setup
+│   └── design_decisions.md            # Technical choices & tradeoffs
+├── ruff.toml                           # Ruff linter config for Databricks notebooks
 ├── .gitignore
 └── README.md
 ```
+
+> **Note:** Shared utility notebooks (data quality checks, ETL logging, schema enforcement) live in a separate [`databricks-shared-utilities`](https://github.com/mikeasim1999/databricks-shared-utilities) repo and are called via `%run` from Databricks Repos. See [docs/design_decisions.md](docs/design_decisions.md) for the reasoning behind this pattern.
 
 ## Tech Stack
 
@@ -67,6 +83,8 @@ denver-vehicle-listings/
 | **Storage**     | Delta Lake (Unity Catalog)                 |
 | **Orchestration** | Databricks Jobs (parameterized notebooks)|
 | **Visualization** | Power BI                                |
+| **CI/CD**         | GitHub Actions, Ruff                     |
+| **Version Control** | Databricks Repos (Git integration)     |
 
 ## How It Works
 
@@ -108,7 +126,9 @@ The pipeline is driven by three Databricks widget parameters:
 
 > **Note:** This project runs in Databricks. The notebooks are stored as `.py` files formatted for Databricks import (cell separators: `# COMMAND ----------`).
 
-1. Import the notebooks into your Databricks workspace
+1. Clone both repos as Git folders in Databricks:
+   - `https://github.com/mikeasim1999/denver-vehicle-listings`
+   - `https://github.com/mikeasim1999/databricks-shared-utilities`
 2. Create the catalog and schemas in Unity Catalog:
    ```sql
    CREATE CATALOG IF NOT EXISTS analytics_lakehouse;
@@ -116,9 +136,10 @@ The pipeline is driven by three Databricks widget parameters:
    CREATE SCHEMA IF NOT EXISTS analytics_lakehouse.silver;
    CREATE SCHEMA IF NOT EXISTS analytics_lakehouse.gold;
    ```
-3. Upload the SQL query files to `/Workspace/<your-path>/Queries/`
-4. Configure a Databricks Job to run the three notebooks in sequence with the appropriate parameters
-5. Connect Power BI to the gold-layer tables via the Databricks SQL connector
+3. Configure a Databricks Job with the Git provider as the source (pointed at `main` branch) to run the three ETL notebooks in sequence with the appropriate parameters
+4. Connect Power BI to the gold-layer tables via the Databricks SQL connector
+
+See [docs/ci_cd.md](docs/ci_cd.md) for full Git integration and CI/CD details.
 
 ## Power BI Report
 
