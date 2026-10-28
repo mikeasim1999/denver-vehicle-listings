@@ -91,15 +91,15 @@ KEYS = {
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_logging_table_exists"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_logging_table_exists"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/log_etl_run"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/log_etl_run"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/load_sql_queries"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/load_sql_queries"
 
 # COMMAND ----------
 
@@ -107,15 +107,15 @@ sql_queries_df = load_sql_queries()
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_column_exists"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_column_exists"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_table_schema"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_table_schema"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/data_quality_checks"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/data_quality_checks"
 
 # COMMAND ----------
 

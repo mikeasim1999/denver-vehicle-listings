@@ -75,11 +75,11 @@ KEYS = {
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_logging_table_exists"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/ensure_logging_table_exists"
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/databricks-shared-utilities/functions/log_etl_run"
+# MAGIC %run "/Repos/mike.asim1999@gmail.com/databricks-shared-utilities/functions/log_etl_run"
 
 # COMMAND ----------
 
