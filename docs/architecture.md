@@ -122,6 +122,10 @@ FROM analytics_lakehouse.gold.daily_listings
 
 This keeps the engineering convention (`snake_case`) in the Delta tables and the business-friendly naming (`Proper Case`) in Power BI, without duplicating data or adding transformation logic to the views.
 
+### Date Table
+
+The Date table is built in Power Query M with a dynamic range — start date derived from the earliest `first_listed` value and end date from the latest `retrieval_date`. This ensures the calendar always covers exactly the data's time span without manual updates. Columns include Year, Quarter, Month, Week, Day of Week, and a `Currently Listed` flag that distinguishes today's active listings from historical snapshots.
+
 ## CI/CD & Version Control
 
 Notebooks are version-controlled in GitHub with a dev/main branch workflow. GitHub Actions runs Ruff linting and notebook structure validation on every push and pull request. Databricks Jobs pull from the `main` branch via Git provider, so only merged code runs in production. See [ci_cd.md](ci_cd.md) for full details.
