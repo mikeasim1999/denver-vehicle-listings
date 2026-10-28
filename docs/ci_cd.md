@@ -8,14 +8,22 @@ Databricks Repos syncs notebooks directly with GitHub so changes flow both direc
 
 ### Setup
 
-Two repos are cloned as Git folders in Databricks:
+Two repos are cloned as Git folders in Databricks, each into a `dev/` and `main/` folder under the user's Home directory:
+
+```
+/Workspace/Users/<your-email>/
+├── dev/
+│   ├── denver-vehicle-listings/        (dev branch — active development)
+│   └── databricks-shared-utilities/    (dev branch)
+└── main/
+    ├── denver-vehicle-listings/        (main branch — production)
+    └── databricks-shared-utilities/    (main branch — %run target)
+```
 
 1. **`denver-vehicle-listings`** — The main project (ETL notebooks, SQL queries, reports)
 2. **`databricks-shared-utilities`** — Reusable utility notebooks shared across projects
 
-In Databricks: **Workspace → Repos → Add Repo** → paste the repo URL → select `main` → **Create Repo**
-
-Each repo is cloned into `/Repos/<your-email>/<repo-name>/`.
+In Databricks: **Workspace → Home → Create → Git folder** → paste the repo URL → select the branch → **Create**
 
 ### Branch Workflow
 
@@ -32,13 +40,13 @@ Each repo is cloned into `/Repos/<your-email>/<repo-name>/`.
 
 ### Cross-Repo Utilities
 
-ETL notebooks in `denver-vehicle-listings` call shared utility functions via `%run` pointing to the shared utilities repo:
+ETL notebooks in `denver-vehicle-listings` call shared utility functions via `%run` pointing to the `main/` copy of the shared utilities repo:
 
 ```python
-%run /Repos/<your-email>/databricks-shared-utilities/functions/data_quality_checks
+%run /Workspace/Users/<your-email>/main/databricks-shared-utilities/functions/data_quality_checks
 ```
 
-This keeps utility code in a single repo instead of duplicating it across projects. See [design_decisions.md](design_decisions.md) for the reasoning behind this pattern.
+The `%run` paths target the `main/` workspace folder so Jobs always reference production-ready code. This keeps utility code in a single repo instead of duplicating it across projects. See [design_decisions.md](design_decisions.md) for the reasoning behind this pattern.
 
 ### Jobs — Git Provider as Source
 
