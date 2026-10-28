@@ -75,6 +75,40 @@ Each layer writes to an `etl_run_log` Delta table tracking:
 - Row counts (inserted, updated, source, target)
 - Execution status (success/failure)
 
+## Shared Utilities
+
+ETL notebooks call reusable functions from a separate [`databricks-shared-utilities`](https://github.com/mikeasim1999/databricks-shared-utilities) repo via `%run`. This keeps common logic (logging, schema enforcement, data quality checks) in one place across projects.
+
+| Function | Used By | Purpose |
+|----------|---------|---------|
+| `ensure_logging_table_exists` | All three notebooks | Creates the `etl_run_log` table if it doesn't exist |
+| `log_etl_run` | All three notebooks | Writes run metadata (row counts, status, timestamps) |
+| `load_sql_queries` | Silver, Gold | Reads `.sql` files and splits on the incremental delimiter |
+| `ensure_column_exists` | Silver, Gold | Adds missing columns to Delta tables |
+| `ensure_table_schema` | Silver, Gold | Validates DataFrame schema against the target table |
+| `data_quality_checks` | Silver, Gold | Runs metadata-driven DQ rules; CRITICAL failures halt the pipeline |
+
+## Data Quality
+
+Data quality checks are metadata-driven — rules are stored in a `data_quality_checks` Delta table and evaluated against each DataFrame before it is written to the target table.
+
+| Severity | Behavior |
+|----------|----------|
+| **CRITICAL** | Raises an exception and halts the pipeline |
+| **WARNING** | Logged to `etl_run_log` but allows the pipeline to continue |
+
+## Delta Lake Maintenance
+
+A weekly VACUUM job reclaims storage from stale files left by `MERGE` operations. The notebook loops through all managed and external tables across configured schemas, measures directory size before and after `VACUUM`, and reports per-schema GB freed via `dbutils.notebook.exit()`. Databricks Job notifications deliver the summary by email.
+
+## Power BI Connection
+
+The gold-layer tables are consumed by Power BI via the **Databricks SQL Connector** (Import mode). The semantic model connects through a Databricks SQL warehouse endpoint, which provides a JDBC/ODBC interface to Unity Catalog tables without requiring a running cluster.
+
+## CI/CD & Version Control
+
+Notebooks are version-controlled in GitHub with a dev/main branch workflow. GitHub Actions runs Ruff linting and notebook structure validation on every push and pull request. Databricks Jobs pull from the `main` branch via Git provider, so only merged code runs in production. See [ci_cd.md](ci_cd.md) for full details.
+
 ## Tech Stack
 
 | Component        | Technology                            |
@@ -86,3 +120,5 @@ Each layer writes to an `etl_run_log` Delta table tracking:
 | Notebooks        | Python (pandas, requests, PySpark)    |
 | Transformations  | Spark SQL (external `.sql` files)     |
 | Visualization    | Power BI                              |
+| CI/CD            | GitHub Actions, Ruff                  |
+| Version Control  | Databricks Repos (Git integration)    |

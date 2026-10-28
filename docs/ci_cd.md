@@ -8,37 +8,60 @@ Databricks Repos syncs notebooks directly with GitHub so changes flow both direc
 
 ### Setup
 
-1. In Databricks, go to **Workspace → Repos → Add Repo**
-2. Paste the repo URL: `https://github.com/mikeasim1999/denver-vehicle-listings`
-3. Select the `main` branch and click **Create Repo**
-4. Databricks clones the repo into `/Repos/<your-email>/denver-vehicle-listings/`
+Two repos are cloned as Git folders in Databricks:
 
-### Workflow
+1. **`denver-vehicle-listings`** — The main project (ETL notebooks, SQL queries, reports)
+2. **`databricks-shared-utilities`** — Reusable utility notebooks shared across projects
 
-- **Edit in Databricks** — Make changes to notebooks in the Repos folder, then use the Git dialog (top-right of the notebook) to commit and push
-- **Edit in GitHub/local** — Push changes to `main`, then pull from the Databricks Repos UI to sync
+In Databricks: **Workspace → Repos → Add Repo** → paste the repo URL → select `main` → **Create Repo**
 
-### Folder Structure
+Each repo is cloned into `/Repos/<your-email>/<repo-name>/`.
 
-The Repos folder mirrors the GitHub repo. Notebooks in `notebooks/` are runnable directly. SQL files in `queries/` are read at runtime via `os.getcwd()` or a widget parameter pointing to the Repos path.
+### Branch Workflow
 
-> **Note:** Utility notebooks called via `%run` need their path updated to the Repos location:
-> ```python
-> %run /Repos/<your-email>/denver-vehicle-listings/notebooks/utilities/data_quality_checks
-> ```
+| Branch | Purpose |
+|--------|---------|
+| `dev` | Active development — edit notebooks here, test changes |
+| `main` | Production — merged via pull request, Jobs pull from this branch |
+
+1. Work in the `dev` branch in Databricks Repos
+2. Commit and push from the Git dialog in the notebook editor
+3. Open a pull request on GitHub (`dev` → `main`)
+4. CI checks run automatically (see below)
+5. Merge the PR — Databricks Jobs pick up the change on next run
+
+### Cross-Repo Utilities
+
+ETL notebooks in `denver-vehicle-listings` call shared utility functions via `%run` pointing to the shared utilities repo:
+
+```python
+%run /Repos/<your-email>/databricks-shared-utilities/functions/data_quality_checks
+```
+
+This keeps utility code in a single repo instead of duplicating it across projects. See [design_decisions.md](design_decisions.md) for the reasoning behind this pattern.
+
+### Jobs — Git Provider as Source
+
+Databricks Jobs are configured to use the **Git provider** as the notebook source, pointed at the `main` branch. The task path is relative to the repo root:
+
+```
+notebooks/etl/dvl_bronze_load
+```
+
+This ensures Jobs always run the latest merged code from `main`, not a workspace copy.
 
 ---
 
 ## CI/CD — GitHub Actions
 
-A GitHub Actions workflow runs automatically on every push and pull request to validate code quality before it reaches Databricks.
+A GitHub Actions workflow runs automatically on every push and pull request to `main`, validating code quality before it reaches Databricks.
 
 ### What It Checks
 
 | Check                  | Tool   | Purpose                                                  |
 |------------------------|--------|----------------------------------------------------------|
 | **Python lint**        | Ruff   | Catches syntax errors, unused imports, formatting issues |
-| **Notebook structure** | Custom | Verifies Databricks notebook cell separators are intact  |
+| **Notebook structure** | Custom | Verifies Databricks notebook headers are intact          |
 
 ### Workflow File
 
@@ -91,7 +114,7 @@ line-length = 120
 
 [lint]
 select = ["E", "F", "W"]
-ignore = ["E501", "F821", "E402", "F841", "F401", "F541"]
+ignore = ["E501", "F821", "E402", "F841", "F401", "F541", "W291", "W292", "W293"]
 
 [lint.per-file-ignores]
 "notebooks/utilities/*.py" = ["F811"]
@@ -107,11 +130,16 @@ ignore = ["E501", "F821", "E402", "F841", "F401", "F541"]
 | F841 | Unused variable — common in notebook exploratory cells |
 | F401 | Unused import — notebooks import for use in later cells or `%run` scope |
 | F541 | f-string without placeholders — common in log messages |
+| W291 | Trailing whitespace — Databricks editor artifacts |
+| W292 | No newline at end of file — Databricks editor artifacts |
+| W293 | Whitespace on blank line — Databricks editor artifacts |
 
 ---
 
 ## Deployment Notes
 
-The pipeline currently deploys manually — notebooks are edited in Databricks and committed via Repos. For a production environment, the next step would be **Databricks Asset Bundles (DABs)**, which define Jobs, clusters, and notebook paths as code in a `databricks.yml` file. This allows `databricks bundle deploy` to push the full pipeline configuration from a CI/CD workflow.
+The pipeline deploys through the dev/main branch workflow described above. Notebooks are edited in Databricks Repos on the `dev` branch, pushed to GitHub, and merged into `main` via pull request. Databricks Jobs pull from `main` automatically.
+
+For a production environment, the next step would be **Databricks Asset Bundles (DABs)**, which define Jobs, clusters, and notebook paths as code in a `databricks.yml` file. This allows `databricks bundle deploy` to push the full pipeline configuration from a CI/CD workflow.
 
 That is outside the scope of this project since it runs on a single workspace with no dev/staging/prod separation, but the Git integration and CI checks above establish the foundation for it.
