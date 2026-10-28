@@ -50,6 +50,9 @@ if init_load.lower() in ["true", "t", "yes", "y", "1"]:
 else:
     init_load = False
 
+dbutils.widgets.text("api_url", "", "API URL")
+api_url = dbutils.widgets.get("api_url")
+
 logger.info(f"Job Run ID: {run_id}")
 logger.info(f"Init Load Parameter: {init_load}")
 
@@ -109,7 +112,7 @@ def fetch_data():
     raw_listings_retrieved = 0
 
     all_data = []
-    url = "<VEHICLE_LISTINGS_API_ENDPOINT>"
+    url = api_url
 
     headers = {
         "User-Agent": "insomnia/9.2.0"
