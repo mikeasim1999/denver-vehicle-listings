@@ -29,4 +29,4 @@ That curiosity shaped the technical decisions below. Daily ingestion captures tr
 
 **No streaming.** The source API returns batch data and updates once per day. A daily scheduled job is the right fit — streaming would add complexity without a faster data source to justify it.
 
-**Workspace-scoped `%run` paths.** The `%run` calls to the shared utilities repo use workspace-specific paths (`/Repos/<user>/...`). In a team environment, these would use a shared or service-principal path instead.
+**Workspace-scoped `%run` paths.** The `%run` calls to the shared utilities repo use absolute workspace paths (`/Workspace/Users/<user>/main/...`). In a team environment, these would use a shared or service-principal path with an automated CI/CD sync instead.

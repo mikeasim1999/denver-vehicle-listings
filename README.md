@@ -131,7 +131,7 @@ The pipeline is driven by three Databricks widget parameters:
 
 > **Note:** This project runs in Databricks. The notebooks are stored as `.py` files formatted for Databricks import (cell separators: `# COMMAND ----------`).
 
-1. Clone both repos as Git folders in Databricks:
+1. Clone both repos as Git folders in Databricks under `dev/` and `main/` workspace folders (see [docs/ci_cd.md](docs/ci_cd.md) for the full folder layout):
    - `https://github.com/mikeasim1999/denver-vehicle-listings`
    - `https://github.com/mikeasim1999/databricks-shared-utilities`
 2. Create the catalog and schemas in Unity Catalog:
