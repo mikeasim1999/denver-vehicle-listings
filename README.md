@@ -10,6 +10,8 @@ An end-to-end data engineering pipeline that ingests daily vehicle listings for 
 ![Power BI](https://img.shields.io/badge/Power_BI-F2C811?style=flat&logo=powerbi&logoColor=black)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
 
+[![CI](https://github.com/mikeasim1999/denver-vehicle-listings/actions/workflows/ci.yml/badge.svg)](https://github.com/mikeasim1999/denver-vehicle-listings/actions/workflows/ci.yml)
+
 ## Motivation
 
 After the 2025 tariff announcement, I wanted to see how vehicle prices in the Denver metro area would actually respond — whether list prices climbed, how long cars sat on lots, and whether certain makes or body types were hit harder than others. Rather than rely on national aggregates, I built a pipeline to collect local listing data daily so I could track these shifts firsthand.
@@ -77,7 +79,7 @@ denver-vehicle-listings/
 └── README.md
 ```
 
-> **Note:** Shared utility notebooks (data quality checks, ETL logging, schema enforcement) live in a separate [`databricks-shared-utilities`](https://github.com/mikeasim1999/databricks-shared-utilities) repo and are called via `%run` from Databricks Repos. See [docs/design_decisions.md](docs/design_decisions.md) for the reasoning behind this pattern.
+> **Note:** Shared utility notebooks (data quality checks, ETL logging, schema enforcement) live in a separate [`databricks-shared-utilities`](https://github.com/mikeasim1999/databricks-shared-utilities) repo and are called via `%run` with workspace paths. See [docs/design_decisions.md](docs/design_decisions.md) for the reasoning behind this pattern.
 
 ## Tech Stack
 
