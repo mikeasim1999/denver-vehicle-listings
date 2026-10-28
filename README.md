@@ -39,6 +39,11 @@ This project collects ~50 pages of vehicle listing data daily from a third-party
                        OVERWRITE        100+ columns         3 tables
 ```
 
+### Databricks Job
+![Job Pipeline](reports/screenshots/job_pipeline.png)
+
+The three ETL notebooks run as sequential tasks in a single Databricks Job, pulling from the `main` branch via Git provider.
+
 See [docs/architecture.md](docs/architecture.md) for the full architecture breakdown, layer details, and incremental strategy.
 
 ## Project Structure
@@ -62,7 +67,7 @@ denver-vehicle-listings/
 │       └── vehicles.sql               # Vehicle dimension (dedup)
 ├── reports/
 │   ├── measures.dax                    # All 20 DAX measures from the semantic model
-│   └── screenshots/                    # Power BI report screenshots
+│   └── screenshots/                    # Pipeline & Power BI screenshots
 ├── docs/
 │   ├── architecture.md                 # Medallion architecture & layer details
 │   ├── ci_cd.md                        # Git integration & CI/CD setup
@@ -164,3 +169,20 @@ The report is built around a **field parameter** (`Param - Metrics`) that drives
 ![Data Model](reports/screenshots/data_model.png)
 
 The semantic model follows a star schema with `Daily Denver Vehicle Listings` as the fact table, `Dealers` and `Vehicles` as dimension tables, and a `Date` table for time intelligence. The `_Measures` table holds all 20 DAX measures, and `Param - Metrics` / `Timeframe Selection` are disconnected tables that drive report interactivity.
+
+## Pipeline in Action
+
+### ETL Run Log
+![ETL Run Log](reports/screenshots/etl_run_log_sample.png)
+
+Every pipeline run writes to the `etl_run_log` Delta table — run ID, timestamps, row counts, duration, and status. The log above shows daily incremental merges completing in ~30 seconds.
+
+### Silver Layer — Sample Data
+![Silver Table Sample](reports/screenshots/silver_table_sample.png)
+
+The silver table after transformation — composite keys (`transaction_listing_id`, `listing_id`, `vehicle_id`, `dealer_id`), tracking fields (`first_seen`, `retrieval_date`), and derived columns like `current_list_price_date`.
+
+### Data Quality Checks
+![Data Quality Checks](reports/screenshots/data_quality_checks_output.png)
+
+Metadata-driven validation runs before every write. CRITICAL failures halt the pipeline; WARNING failures are logged and allowed to continue.
