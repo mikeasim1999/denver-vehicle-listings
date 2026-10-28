@@ -53,6 +53,9 @@ else:
 dbutils.widgets.text("api_url", "", "API URL")
 api_url = dbutils.widgets.get("api_url")
 
+dbutils.widgets.text("datadome_cookie", "", "DataDome Cookie")
+cookie_value = dbutils.widgets.get("datadome_cookie")
+
 logger.info(f"Job Run ID: {run_id}")
 logger.info(f"Init Load Parameter: {init_load}")
 
@@ -115,6 +118,7 @@ def fetch_data():
     url = api_url
 
     headers = {
+        "cookie": f"datadome={cookie_value}",
         "User-Agent": "insomnia/9.2.0"
     }
 
@@ -140,7 +144,7 @@ def fetch_data():
             raw_listings_retrieved += len(listings)
             all_data.extend(listings)
         except requests.exceptions.HTTPError as e:
-            logger.error(f"Error on page {page}. HTTP Error: {e}")
+            logger.error(f"Error on page {page}. HTTP Error: {e.response.status_code}")
             pages_failed += 1
         except requests.exceptions.Timeout:
             logger.error(f"Error on page {page}. Request Timeout")
