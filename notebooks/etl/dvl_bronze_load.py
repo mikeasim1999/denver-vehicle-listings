@@ -50,11 +50,8 @@ if init_load.lower() in ["true", "t", "yes", "y", "1"]:
 else:
     init_load = False
 
-dbutils.widgets.text("api_url", "", "API URL")
-api_url = dbutils.widgets.get("api_url")
-
-dbutils.widgets.text("datadome_cookie", "", "DataDome Cookie")
-cookie_value = dbutils.widgets.get("datadome_cookie")
+api_url = dbutils.secrets.get(scope="dvl", key="dvl-url")
+cookie_value = dbutils.secrets.get(scope="dvl", key="dvl-cookie")
 
 logger.info(f"Job Run ID: {run_id}")
 logger.info(f"Init Load Parameter: {init_load}")
