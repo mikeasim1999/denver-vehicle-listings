@@ -72,7 +72,7 @@ max_workers = 4
 CATALOG = 'analytics_lakehouse'
 TARGET_SCHEMA = 'silver'
 SOURCE_SCHEMA = 'bronze'
-QUERY_PATH = '/Workspace/Denver_Vehicle_Listings/Queries/silver'
+QUERY_PATH = '../../queries/silver'
 
 # COMMAND ----------
 

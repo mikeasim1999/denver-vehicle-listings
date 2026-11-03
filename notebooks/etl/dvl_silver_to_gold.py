@@ -66,7 +66,7 @@ logger.info(f"Start Time: {start_timestamp}")
 CATALOG = 'analytics_lakehouse'
 TARGET_SCHEMA = 'gold'
 SOURCE_SCHEMA = 'silver'
-QUERY_PATH = '/Workspace/Denver_Vehicle_Listings/Queries/gold'
+QUERY_PATH = '../../queries/gold'
 
 # COMMAND ----------
 
