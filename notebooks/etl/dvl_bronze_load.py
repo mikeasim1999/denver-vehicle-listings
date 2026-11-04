@@ -50,13 +50,20 @@ if init_load.lower() in ["true", "t", "yes", "y", "1"]:
 else:
     init_load = False
 
+env = dbutils.widgets.get("env")
+if env.lower() in ["prod", "p", "pr", "prod"]:
+    CATALOG = 'analytics_lakehouse'
+else:
+    CATALOG = 'analytics_lakehouse_dev'
+
+logger.info(f"Environment: {env}. Writing to {CATALOG}")
+
 api_url = dbutils.secrets.get(scope="dvl", key="dvl-url")
 cookie_value = dbutils.secrets.get(scope="dvl", key="dvl-cookie")
 
 logger.info(f"Job Run ID: {run_id}")
 logger.info(f"Init Load Parameter: {init_load}")
 
-TARGET_CATALOG = 'analytics_lakehouse'
 TARGET_SCHEMA = 'bronze'
 
 logger.info(f"Load Type: {'Initial Load' if init_load else 'Incremental Load'}")
@@ -437,7 +444,7 @@ for table_name in TABLES:
 
     pipeline_result = run_bronze_pipeline(
         df=df,
-        catalog=TARGET_CATALOG,
+        catalog=CATALOG,
         schema_name=TARGET_SCHEMA,
         table_name=table_name,
         init_load=init_load,
