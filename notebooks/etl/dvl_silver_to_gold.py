@@ -55,6 +55,14 @@ if init_load:
 else:
     incremental_interval = int(dbutils.widgets.get("incrementalInterval"))
 
+env = dbutils.widgets.get("env")
+if env.lower() in ["prod", "p", "pr", "prod"]:
+    CATALOG = 'analytics_lakehouse'
+else:
+    CATALOG = 'analytics_lakehouse_dev'
+
+logger.info(f"Environment: {env}. Writing to {CATALOG}")
+
 logger.info(f"Job Run ID: {run_id}")
 logger.info(f"Init Load Parameter: {init_load}")
 logger.info(f"Load Type: {'Initial Load' if init_load else 'Incremental Load'}")
