@@ -81,6 +81,7 @@ CATALOG = 'analytics_lakehouse'
 TARGET_SCHEMA = 'silver'
 SOURCE_SCHEMA = 'bronze'
 QUERY_PATH = '../../queries/silver'
+DATA_SOURCE = 'DVL'
 
 # COMMAND ----------
 
@@ -123,7 +124,15 @@ sql_queries_df = load_sql_queries()
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/data_quality_checks"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/pull_data_quality_checks"
+
+# COMMAND ----------
+
+dq_rules  = pull_data_quality_checks(DATA_SOURCE)
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/run_data_quality_checks"
 
 # COMMAND ----------
 
@@ -205,7 +214,7 @@ def main_etl(table_name):
         read_duration = (datetime.now() - read_start).total_seconds()
         logger.info(f"Read completed in {read_duration:.2f}s")
 
-        data_quality_checks(table_name, df)
+        run_data_quality_checks(table_name, df, dq_rules)
 
         has_data = bool(df.take(1))
         if not has_data:
