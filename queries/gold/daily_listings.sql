@@ -8,7 +8,6 @@ SELECT
   ,sdvl.vin
   ,sdvl.owner_history
   ,sdvl.accident_history
-  ,sdvl.accident_history
   ,sdvl.total_top_options
   ,sdvl.mileage
   ,sdvl.mpg_city
