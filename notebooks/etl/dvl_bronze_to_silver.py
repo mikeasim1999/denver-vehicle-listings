@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC ## Bronze to Silver Transformation
 # MAGIC
@@ -34,8 +38,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logger = logging.getLogger(__name__)
 
 dbutils.widgets.text("initLoad", "false", "Initial Load Flag")
-dbutils.widgets.text("incrementalInterval", "3", "Incremental Interval (days)")
-dbutils.widgets.text("run_id", "", "Job Run ID")
+dbutils.widgets.text("incrementalInterval", "14", "Incremental Interval (days)")
+dbutils.widgets.text("env", "dev", "Environment")
 
 # Get Job run ID
 try:
@@ -81,6 +85,7 @@ CATALOG = 'analytics_lakehouse'
 TARGET_SCHEMA = 'silver'
 SOURCE_SCHEMA = 'bronze'
 QUERY_PATH = '../../queries/silver'
+DATA_SOURCE = 'DVL'
 
 # COMMAND ----------
 
@@ -123,7 +128,15 @@ sql_queries_df = load_sql_queries()
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/data_quality_checks"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/pull_data_quality_checks"
+
+# COMMAND ----------
+
+dq_rules  = pull_data_quality_checks(DATA_SOURCE)
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/run_data_quality_checks"
 
 # COMMAND ----------
 
@@ -205,7 +218,7 @@ def main_etl(table_name):
         read_duration = (datetime.now() - read_start).total_seconds()
         logger.info(f"Read completed in {read_duration:.2f}s")
 
-        data_quality_checks(table_name, df)
+        run_data_quality_checks(table_name, df, dq_rules)
 
         has_data = bool(df.take(1))
         if not has_data:
