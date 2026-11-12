@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC ## Bronze to Silver Transformation
 # MAGIC
@@ -34,8 +38,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logger = logging.getLogger(__name__)
 
 dbutils.widgets.text("initLoad", "false", "Initial Load Flag")
-dbutils.widgets.text("incrementalInterval", "3", "Incremental Interval (days)")
-dbutils.widgets.text("run_id", "", "Job Run ID")
+dbutils.widgets.text("incrementalInterval", "14", "Incremental Interval (days)")
+dbutils.widgets.text("env", "dev", "Environment")
 
 # Get Job run ID
 try:
