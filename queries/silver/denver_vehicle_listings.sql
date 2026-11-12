@@ -128,7 +128,7 @@ WITH drf AS ( -- dealer rating fill
 
       -- Dealer Information
       sdvl.`dealer.dealerInventoryUrl` AS dealer_inventory_url,
-      sdvl.`dealer.micrositeUrl` AS dealer_listing_url,
+      sdvl.`dealer.cfxMicrositeUrl` AS dealer_listing_url,
       sdvl.`dealer.name` AS dealer_name,
       sdvl.`dealer.address` AS dealer_address,
       sdvl.`dealer.city` AS dealer_city,
