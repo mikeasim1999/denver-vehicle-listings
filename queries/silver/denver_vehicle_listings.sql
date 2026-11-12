@@ -1,18 +1,18 @@
 WITH drf AS ( -- dealer rating fill
   SELECT
-    `dealer.sourceId`,
+    `dealer.carfaxId`,
     AVG(`dealer.dealerAverageRating`) AS average_dealer_rating,
     AVG(`dealer.dealerReviewRating`) AS average_review_rating,
     AVG(`dealer.dealerReviewCount`) AS average_review_count
   FROM {CATALOG}.{SOURCE_SCHEMA}.denver_vehicle_listings
-  GROUP BY `dealer.sourceId`
+  GROUP BY `dealer.carfaxId`
   ),
   bt AS ( -- base table
   SELECT
       -- ID's
       sdvl.unique_id AS transaction_listing_id, -- unique id (pk)
       sdvl.id AS listing_id,
-      sdvl.`dealer.sourceId` AS dealer_id,
+      sdvl.`dealer.carfaxId` AS dealer_id,
       REPLACE(CONCAT_WS('|'
           , COALESCE(CAST(sdvl.year AS STRING), '')
           , COALESCE(sdvl.make, '')
@@ -319,7 +319,7 @@ WITH drf AS ( -- dealer rating fill
       INITCAP(REPLACE(ARRAY_JOIN(sdvl.`reliability.reliabilityImpactFactors`, ', '), '_', ' ')) AS reliability_impact_factors
   FROM {CATALOG}.{SOURCE_SCHEMA}.denver_vehicle_listings AS sdvl
   LEFT JOIN drf
-    ON sdvl.`dealer.sourceId` = drf.`dealer.sourceId`),
+    ON sdvl.`dealer.carfaxId` = drf.`dealer.carfaxId`),
   mpgf AS ( -- miles per gallon fill
   SELECT
     vehicle_id,
