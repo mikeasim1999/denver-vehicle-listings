@@ -24,6 +24,7 @@ SELECT
   ,sdvl.total_price_history_entries
   ,sdvl.days_on_market
   ,sdvl.total_recorded_services
+  ,sdvl.effective_load_datetime
 FROM {CATALOG}.{SOURCE_SCHEMA}.denver_vehicle_listings AS sdvl
 -- << INCREMENTAL >> --
 LEFT JOIN
