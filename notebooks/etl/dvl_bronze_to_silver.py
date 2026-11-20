@@ -81,7 +81,6 @@ logger.info(f"Start Time: {start_timestamp}")
 run_concurrent = False
 max_workers = 4
 
-CATALOG = 'analytics_lakehouse'
 TARGET_SCHEMA = 'silver'
 SOURCE_SCHEMA = 'bronze'
 QUERY_PATH = '../../queries/silver'
@@ -104,7 +103,19 @@ KEYS = {
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/ensure_logging_table_exists"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/ensure_etl_log_table_exists"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/ensure_watermark_exists"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/get_watermark"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/update_watermarks"
 
 # COMMAND ----------
 
@@ -128,6 +139,10 @@ sql_queries_df = load_sql_queries()
 
 # COMMAND ----------
 
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/ensure_dq_log_table_exists"
+
+# COMMAND ----------
+
 # MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/pull_data_quality_checks"
 
 # COMMAND ----------
@@ -137,6 +152,10 @@ dq_rules  = pull_data_quality_checks(DATA_SOURCE)
 # COMMAND ----------
 
 # MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/run_data_quality_checks"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/log_data_quality_results"
 
 # COMMAND ----------
 
@@ -164,6 +183,7 @@ def main_etl(table_name):
     effective_mode = "unknown"
     was_forced_full_load = False
     num_source = num_target = num_inserted = num_updated = num_deleted = num_copied = 0
+    dq_results = []
 
     target_table = f"{CATALOG}.{TARGET_SCHEMA}.{table_name}"
     table_exists = spark.catalog.tableExists(target_table)
@@ -201,6 +221,14 @@ def main_etl(table_name):
             sql_query = raw_sql.strip()
             logger.info(f"Using INCREMENTAL SQL (includes LEFT JOIN filter logic)")
 
+        watermark_date = None
+        sql_expects_watermark = '{WATERMARK_DATE}' in sql_query
+
+        if load_type == "MERGE" and sql_expects_watermark:
+            watermark_date = get_watermark(CATALOG, TARGET_SCHEMA, table_name)
+            if watermark_date is None:
+                raise ValueError(f"Incremental SQL for {table_name} expects WATERMARK_DATE but no watermark exists. Run a full load first.")
+
         # Format SQL with parameters
         sql_query = sql_query.format(
             CATALOG=CATALOG,
@@ -208,6 +236,7 @@ def main_etl(table_name):
             TARGET_SCHEMA=TARGET_SCHEMA,
             incrementalInterval=incremental_interval,
             initLoad="true" if init_load else "false",
+            WATERMARK_DATE=watermark_date or '',
         )
 
         # Execute SQL and read data
@@ -218,7 +247,7 @@ def main_etl(table_name):
         read_duration = (datetime.now() - read_start).total_seconds()
         logger.info(f"Read completed in {read_duration:.2f}s")
 
-        run_data_quality_checks(table_name, df, dq_rules)
+        dq_results = run_data_quality_checks(table_name, df, dq_rules, run_id)
 
         has_data = bool(df.take(1))
         if not has_data:
@@ -289,6 +318,15 @@ def main_etl(table_name):
         duration = (datetime.now() - start_time).total_seconds()
         logger.info(f"Completed in {duration:.2f}s (Read: {read_duration:.2f}s, Write: {write_duration:.2f}s)")
 
+        if effective_mode in ["overwrite", "create", "merge"]:
+            try:
+                modified_col = next((c for c in ["last_modified_datetime", "TimeModified"] if c in df.columns), None)
+                if modified_col:
+                    max_val = df.agg(F.max(F.col(modified_col))).collect()[0][0]
+                    result["watermark"] = str(max_val) if max_val else None
+            except Exception as e:
+                logger.warning(f"Could not get max modified for {table_name}: {e}")
+
         result.update({
             "success": True, "skipped": False,
             "source_row_count": num_source, "target_row_count": num_target,
@@ -308,6 +346,7 @@ def main_etl(table_name):
         logger.error(traceback.format_exc())
 
     finally:
+        result["dq_results"] = dq_results
         result.setdefault("duration", duration)
         result.setdefault("effective_mode", effective_mode)
         log_run(
@@ -355,6 +394,18 @@ def execute_etl(run_concurrent, max_workers):
         logger.error(f"Failed to create logging table - job cannot continue: {e}")
         raise
 
+    try:
+        ensure_watermark_table(CATALOG, TARGET_SCHEMA)
+    except Exception as e:
+        logger.error(f"Failed to create watermark table - job cannot continue: {e}")
+        raise
+
+    try:
+        ensure_dq_log_table(CATALOG, TARGET_SCHEMA)
+    except Exception as e:
+        logger.error(f"Failed to create DQ log table - job cannot continue: {e}")
+        raise
+
     if run_concurrent:
         logger.info(f"Running ETL concurrently with max_workers={max_workers}")
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -366,6 +417,7 @@ def execute_etl(run_concurrent, max_workers):
                     results.append(res)
                 except Exception as e:
                     logger.error(f"{table_name} - CRITICAL FAILURE: {e}")
+                    logger.error(traceback.format_exc())
                     results.append({"table_name": table_name, "success": False, "error": str(e)})
     else:
         logger.info("Running ETL sequentially")
@@ -375,6 +427,7 @@ def execute_etl(run_concurrent, max_workers):
                 results.append(res)
             except Exception as e:
                 logger.error(f"{table_name} - CRITICAL FAILURE: {e}")
+                logger.error(traceback.format_exc())
                 results.append({"table_name": table_name, "success": False, "error": str(e)})
 
     job_duration = (datetime.now() - job_start_time).total_seconds()
@@ -383,12 +436,31 @@ def execute_etl(run_concurrent, max_workers):
     skipped = sum(1 for r in results if r.get("skipped"))
     failed = sum(1 for r in results if not r.get("success"))
 
+    # Update watermarks for all successful runs
+    watermark_updates = [(r["table"], r["watermark"]) for r in results if r.get("success") and not r.get("skipped") and r.get("watermark")]
+
+    if watermark_updates:
+        try:
+            update_watermarks(CATALOG, TARGET_SCHEMA, watermark_updates)
+            logger.info(f"Watermarks updated for {len(watermark_updates)} tables")
+        except Exception as e:
+            logger.error(f"Failed to update watermarks: {e}")
+
+    all_dq_results = []
+    for r in results:
+        all_dq_results.extend(r.get("dq_results", []))
+
+    if all_dq_results:
+        try:
+            log_dq_results(CATALOG, TARGET_SCHEMA, all_dq_results)
+        except Exception as e:
+            logger.error(f"Failed to log DQ results: {e}")
+
     logger.info(f"Run ID: {run_id}")
     logger.info(f"Job Duration: {job_duration:.2f}s ({job_duration/60:.2f}min)")
     logger.info(f"Tables: {total_tables} | Success: {successful} | Skipped: {skipped} | Failed: {failed}")
 
     return results
-
 
 table_results = execute_etl(run_concurrent, max_workers)
 
