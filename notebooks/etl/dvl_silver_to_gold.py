@@ -81,13 +81,13 @@ DATA_SOURCE = 'DVL'
 
 # COMMAND ----------
 
-tables = {
+TABLES = {
     "daily_listings",
     "dealers",
     "vehicles",
 }
 
-keys = {
+KEYS = {
     "daily_listings": ["transaction_listing_id"],
     "vehicles": ["vehicle_id"],
 }
