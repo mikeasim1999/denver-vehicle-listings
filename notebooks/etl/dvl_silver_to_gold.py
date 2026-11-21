@@ -71,7 +71,9 @@ start_time = datetime.now()
 start_timestamp = spark.sql("SELECT current_timestamp()").collect()[0][0]
 logger.info(f"Start Time: {start_timestamp}")
 
-CATALOG = 'analytics_lakehouse'
+run_concurrent = False
+max_workers = 4
+
 TARGET_SCHEMA = 'gold'
 SOURCE_SCHEMA = 'silver'
 QUERY_PATH = '../../queries/gold'
@@ -79,13 +81,13 @@ DATA_SOURCE = 'DVL'
 
 # COMMAND ----------
 
-tables = {
+TABLES = {
     "daily_listings",
     "dealers",
     "vehicles",
 }
 
-keys = {
+KEYS = {
     "daily_listings": ["transaction_listing_id"],
     "vehicles": ["vehicle_id"],
 }
@@ -97,7 +99,19 @@ keys = {
 
 # COMMAND ----------
 
-# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/ensure_logging_table_exists"
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/ensure_etl_log_table_exists"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/ensure_watermark_exists"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/get_watermark"
+
+# COMMAND ----------
+
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/update_watermarks"
 
 # COMMAND ----------
 
@@ -121,6 +135,10 @@ sql_queries_df = load_sql_queries()
 
 # COMMAND ----------
 
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/ensure_dq_log_table_exists"
+
+# COMMAND ----------
+
 # MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/pull_data_quality_checks"
 
 # COMMAND ----------
@@ -133,6 +151,10 @@ dq_rules  = pull_data_quality_checks(DATA_SOURCE)
 
 # COMMAND ----------
 
+# MAGIC %run "/Workspace/Users/mike.asim1999@gmail.com/main/databricks-shared-utilities/functions/log_data_quality_results"
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Main ETL Function
 
@@ -140,8 +162,14 @@ dq_rules  = pull_data_quality_checks(DATA_SOURCE)
 
 def main_etl(table_name):
     """
-    Processes a single table from Silver to Gold.
-    Supports full overwrite and incremental merge via SQL delimiter pattern.
+    Main ETL function that processes a single table from Bronze to Silver.
+
+    Logic Flow:
+    1. Determine load type (full vs incremental)
+    2. Select appropriate SQL (before or after delimiter)
+    3. Execute SQL and get data
+    4. Write data (overwrite for full load, merge for incremental)
+    5. Log results
     """
     result = {"table": table_name, "success": False, "skipped": False}
     start_time = datetime.now()
@@ -149,21 +177,36 @@ def main_etl(table_name):
     read_duration = 0.0
     write_duration = 0.0
     effective_mode = "unknown"
+    was_forced_full_load = False
     num_source = num_target = num_inserted = num_updated = num_deleted = num_copied = 0
+    dq_results = []
 
     target_table = f"{CATALOG}.{TARGET_SCHEMA}.{table_name}"
-    effective_initLoad = init_load
     table_exists = spark.catalog.tableExists(target_table)
+    pk = KEYS.get(table_name, [])
+    force_full_load = not pk
 
     try:
-        query_row = sql_queries_df.filter(F.col("table_name") == table_name).collect()
+        if not table_exists:
+            load_type = "CREATE"
+        elif init_load:
+            load_type = "OVERWRITE"
+        elif force_full_load:
+            load_type = "OVERWRITE"
+            was_forced_full_load = True
+            logger.info(f"{target_table} - No merge key provided, forcing full load")
+        else:
+            load_type = "MERGE"
+
+        query_row = sql_queries_df.filter(F.col("table_name") == table_name).select("query").first()
         if not query_row:
             raise ValueError(f"SQL file not found for table: {table_name}")
 
-        raw_sql = query_row[0]["query"]
+        raw_sql = query_row[0]
         delimiter = "-- << INCREMENTAL >> --"
 
-        if effective_initLoad:
+        # Select appropriate SQL based on load type
+        if load_type in ["CREATE", "OVERWRITE"]:
             if delimiter in raw_sql:
                 sql_query = raw_sql.split(delimiter)[0].strip()
                 logger.info(f"Using FULL LOAD SQL (before delimiter)")
@@ -174,26 +217,37 @@ def main_etl(table_name):
             sql_query = raw_sql.strip()
             logger.info(f"Using INCREMENTAL SQL (includes LEFT JOIN filter logic)")
 
+        watermark_date = None
+        sql_expects_watermark = '{WATERMARK_DATE}' in sql_query
+
+        if load_type == "MERGE" and sql_expects_watermark:
+            watermark_date = get_watermark(CATALOG, TARGET_SCHEMA, table_name)
+            if watermark_date is None:
+                raise ValueError(f"Incremental SQL for {table_name} expects WATERMARK_DATE but no watermark exists. Run a full load first.")
+
+        # Format SQL with parameters
         sql_query = sql_query.format(
             CATALOG=CATALOG,
             SOURCE_SCHEMA=SOURCE_SCHEMA,
             TARGET_SCHEMA=TARGET_SCHEMA,
             incrementalInterval=incremental_interval,
-            initLoad="true" if effective_initLoad else "false",
+            initLoad="true" if init_load else "false",
+            WATERMARK_DATE=watermark_date or '',
         )
 
+        # Execute SQL and read data
         logger.info(f"Executing SQL query")
         read_start = datetime.now()
         df = spark.sql(sql_query)
 
-        run_data_quality_checks(table_name, df, dq_rules)
-        
-        has_data = bool(df.take(1))
         read_duration = (datetime.now() - read_start).total_seconds()
         logger.info(f"Read completed in {read_duration:.2f}s")
 
+        dq_results = run_data_quality_checks(table_name, df, dq_rules, run_id)
+
+        has_data = bool(df.take(1))
         if not has_data:
-            logger.info(f"No source rows found -> skipping write")
+            logger.info(f"No source rows found for {table_name} - skipping write")
             target_row_count = spark.table(target_table).count() if table_exists else 0
             duration = (datetime.now() - start_time).total_seconds()
             result.update({
@@ -205,24 +259,26 @@ def main_etl(table_name):
             })
             return result
 
+        # Write data to target table
         write_start = datetime.now()
-        pk = keys.get(table_name, [])
 
-        if effective_initLoad or not pk:
-            logger.info(f"Writing data using OVERWRITE mode")
+        if load_type in ["CREATE", "OVERWRITE"]:
+            logger.info(f"Writing data using {load_type} mode")
+            num_source = df.count()
             df.write.mode("overwrite") \
                 .option("overwriteSchema", "true") \
                 .format("delta") \
                 .saveAsTable(target_table)
-            num_source = df.count()
             num_target = num_source
             num_inserted = num_source
-            effective_mode = "overwrite"
-            logger.info(f"Overwrote table with {num_source:,} rows")
+            num_updated = num_deleted = num_copied = 0
+            effective_mode = load_type.lower()
+            logger.info(f"{load_type} completed with {num_source:,} rows")
         else:
             logger.info(f"Writing data using MERGE mode")
-            if not table_exists:
-                df.limit(0).write.format("delta").mode("overwrite").saveAsTable(target_table)
+            source_missing_keys = [c for c in pk if c not in df.columns]
+            if source_missing_keys:
+                raise ValueError(f"Merge key(s) missing from source data for {table_name}: {source_missing_keys}")
             delta_table = DeltaTable.forName(spark, target_table)
             merge_condition = " AND ".join([f"target.`{c}` = source.`{c}`" for c in pk])
 
@@ -244,12 +300,28 @@ def main_etl(table_name):
                 num_deleted = int(m.get("numTargetRowsDeleted", 0))
                 num_copied = int(m.get("numTargetRowsCopied", 0))
                 num_target = int(m.get("numOutputRows", num_source))
+                logger.info(
+                    f"Merge completed: Source={num_source:,}, "
+                    f"Inserted={num_inserted:,}, Updated={num_updated:,}, "
+                    f"Deleted={num_deleted:,}, Copied={num_copied:,}"
+                )
             else:
+                logger.warning("Could not extract merge metrics")
                 num_source = df.count()
                 num_target = spark.table(target_table).count()
 
         write_duration = (datetime.now() - write_start).total_seconds()
         duration = (datetime.now() - start_time).total_seconds()
+        logger.info(f"Completed in {duration:.2f}s (Read: {read_duration:.2f}s, Write: {write_duration:.2f}s)")
+
+        if effective_mode in ["overwrite", "create", "merge"]:
+            try:
+                modified_col = next((c for c in ["last_modified_datetime", "TimeModified"] if c in df.columns), None)
+                if modified_col:
+                    max_val = df.agg(F.max(F.col(modified_col))).collect()[0][0]
+                    result["watermark"] = str(max_val) if max_val else None
+            except Exception as e:
+                logger.warning(f"Could not get max modified for {table_name}: {e}")
 
         result.update({
             "success": True, "skipped": False,
@@ -265,33 +337,36 @@ def main_etl(table_name):
         result["error"] = str(e)
         result["success"] = False
         effective_mode = "error"
-        logger.error(f"Failed: {table_name} - {str(e)}")
+        logger.error(f"Failed: {table_name}")
+        logger.error(f"Error: {str(e)}")
         logger.error(traceback.format_exc())
 
     finally:
+        result["dq_results"] = dq_results
         result.setdefault("duration", duration)
         result.setdefault("effective_mode", effective_mode)
         log_run(
             catalog=CATALOG,
             schema_name=TARGET_SCHEMA,
             run_context={
-                "run_id": run_id, "table_name": table_name,
-                "log_datetime": start_time,
-                "status": "SKIPPED" if result.get("skipped") else ("SUCCESS" if result["success"] else "FAILED"),
+                "run_id": run_id,
+                "table_name": table_name,
+                "log_datetime": datetime.now(),
+                "status": "SKIPPED" if result.get("skipped", False) else ("SUCCESS" if result["success"] else "FAILED"),
                 "load_type": result.get("effective_mode", "unknown"),
                 "error_message": result.get("error"),
                 "duration_seconds": result.get("duration", 0.0),
                 "duration_minutes": result.get("duration", 0.0) / 60.0,
                 "read_duration_seconds": result.get("read_duration", 0.0),
                 "write_duration_seconds": result.get("write_duration", 0.0),
-                "source_row_count": result.get("source_row_count", 0),
-                "target_row_count": result.get("target_row_count", 0),
-                "inserted": result.get("num_inserted", 0),
-                "updated": result.get("num_updated", 0),
-                "deleted": result.get("num_deleted", 0),
-                "copied": result.get("num_copied", 0),
+                "source_row_count": result.get("source_row_count"),
+                "target_row_count": result.get("target_row_count"),
+                "inserted": result.get("num_inserted"),
+                "updated": result.get("num_updated"),
+                "deleted": result.get("num_deleted"),
+                "copied": result.get("num_copied"),
                 "incremental_interval": incremental_interval,
-                "was_forced_full_load": True,
+                "was_forced_full_load": was_forced_full_load,
             },
         )
 
@@ -304,7 +379,7 @@ def main_etl(table_name):
 
 # COMMAND ----------
 
-def execute_etl():
+def execute_etl(run_concurrent, max_workers):
     """Orchestrates the ETL process for all configured tables."""
     job_start_time = datetime.now()
     results = []
@@ -312,30 +387,78 @@ def execute_etl():
     try:
         ensure_logging_table(CATALOG, TARGET_SCHEMA)
     except Exception as e:
-        logger.error(f"Failed to create logging table: {e}")
+        logger.error(f"Failed to create logging table - job cannot continue: {e}")
         raise
 
-    for idx, tbl in enumerate(tables, 1):
-        try:
-            res = main_etl(tbl)
-            results.append(res)
-        except Exception as e:
-            logger.error(f"{tbl} - CRITICAL FAILURE: {e}")
-            results.append({"table": tbl, "success": False, "error": str(e)})
+    try:
+        ensure_watermark_table(CATALOG, TARGET_SCHEMA)
+    except Exception as e:
+        logger.error(f"Failed to create watermark table - job cannot continue: {e}")
+        raise
+
+    try:
+        ensure_dq_log_table(CATALOG, TARGET_SCHEMA)
+    except Exception as e:
+        logger.error(f"Failed to create DQ log table - job cannot continue: {e}")
+        raise
+
+    if run_concurrent:
+        logger.info(f"Running ETL concurrently with max_workers={max_workers}")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(main_etl, t): t for t in TABLES}
+            for future in as_completed(futures):
+                table_name = futures[future]
+                try:
+                    res = future.result()
+                    results.append(res)
+                except Exception as e:
+                    logger.error(f"{table_name} - CRITICAL FAILURE: {e}")
+                    logger.error(traceback.format_exc())
+                    results.append({"table_name": table_name, "success": False, "error": str(e)})
+    else:
+        logger.info("Running ETL sequentially")
+        for table_name in TABLES:
+            try:
+                res = main_etl(table_name)
+                results.append(res)
+            except Exception as e:
+                logger.error(f"{table_name} - CRITICAL FAILURE: {e}")
+                logger.error(traceback.format_exc())
+                results.append({"table_name": table_name, "success": False, "error": str(e)})
 
     job_duration = (datetime.now() - job_start_time).total_seconds()
+    total_tables = len(results)
     successful = sum(1 for r in results if r.get("success") and not r.get("skipped"))
     skipped = sum(1 for r in results if r.get("skipped"))
     failed = sum(1 for r in results if not r.get("success"))
 
+    # Update watermarks for all successful runs
+    watermark_updates = [(r["table"], r["watermark"]) for r in results if r.get("success") and not r.get("skipped") and r.get("watermark")]
+
+    if watermark_updates:
+        try:
+            update_watermarks(CATALOG, TARGET_SCHEMA, watermark_updates)
+            logger.info(f"Watermarks updated for {len(watermark_updates)} tables")
+        except Exception as e:
+            logger.error(f"Failed to update watermarks: {e}")
+
+    all_dq_results = []
+    for r in results:
+        all_dq_results.extend(r.get("dq_results", []))
+
+    if all_dq_results:
+        try:
+            log_dq_results(CATALOG, TARGET_SCHEMA, all_dq_results)
+        except Exception as e:
+            logger.error(f"Failed to log DQ results: {e}")
+
     logger.info(f"Run ID: {run_id}")
     logger.info(f"Job Duration: {job_duration:.2f}s ({job_duration/60:.2f}min)")
-    logger.info(f"Tables: {len(results)} | Success: {successful} | Skipped: {skipped} | Failed: {failed}")
+    logger.info(f"Tables: {total_tables} | Success: {successful} | Skipped: {skipped} | Failed: {failed}")
 
     return results
 
-
-results = execute_etl()
+table_results = execute_etl(run_concurrent, max_workers)
 
 # COMMAND ----------
 
