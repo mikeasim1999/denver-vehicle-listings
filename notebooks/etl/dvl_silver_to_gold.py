@@ -468,12 +468,17 @@ table_results = execute_etl(run_concurrent, max_workers)
 # COMMAND ----------
 
 summary_rows = []
-for r in results:
+for r in table_results:
     table_name = r.get("table", "Unknown")
     success = r.get("success", False)
     skipped = r.get("skipped", False)
 
-    status = "Skipped" if skipped else ("Success" if success else "Failed")
+    if skipped:
+        status = "Skipped"
+    elif success:
+        status = "Success"
+    else:
+        status = "Failed"
 
     if success and not skipped:
         row = {
@@ -485,7 +490,8 @@ for r in results:
             "Del": f"{r.get('num_deleted', 0):,}",
             "Cpy": f"{r.get('num_copied', 0):,}",
             "Duration (s)": f"{r.get('duration', 0.0):.2f}",
-            "Mode": r.get("effective_mode", "N/A"), "Error": "",
+            "Mode": r.get("effective_mode", "N/A"),
+            "Error": "",
         }
     elif skipped:
         row = {
@@ -508,9 +514,3 @@ for r in results:
 
 summary_df = pd.DataFrame(summary_rows)
 display(summary_df)
-
-failed_tables = [r.get("table") for r in results if not r.get("success")]
-if failed_tables:
-    logger.error(f"Job completed with failures: {', '.join(failed_tables)}")
-else:
-    logger.info("All tables processed successfully")
